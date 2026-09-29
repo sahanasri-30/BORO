@@ -1,0 +1,8 @@
+﻿import test from 'node:test'; import assert from 'node:assert/strict'; import {User,Category,Equipment,Booking,Review,RentalLog,Notification} from './index.js';
+const hasIndex=(schema:any,fields:Record<string,number|string>,options:Record<string,unknown>={})=>schema.indexes().some((entry:any)=>{const [keys,opts]=entry;return Object.entries(fields).every(([k,v])=>keys[k]===v)&&Object.entries(options).every(([k,v])=>opts[k]===v)});
+test('Mongoose models declare the expected relations and query indexes',async t=>{
+ await t.test('all requested collections are registered',()=>assert.deepEqual([User.modelName,Equipment.modelName,Category.modelName,Booking.modelName,Review.modelName,RentalLog.modelName,Notification.modelName].sort(),['Booking','Category','Equipment','Notification','RentalLog','Review','User'].sort()));
+ await t.test('email, category and review booking keys are unique',()=>{assert.ok(hasIndex(User.schema,{email:1},{unique:true}));assert.ok(hasIndex(Category.schema,{name:1},{unique:true}));assert.ok(hasIndex(Review.schema,{bookingId:1},{unique:true}));});
+ await t.test('equipment and booking references point to expected models',()=>{assert.equal(Equipment.schema.path('ownerId').options.ref,'User');assert.equal(Equipment.schema.path('categoryId').options.ref,'Category');assert.equal(Booking.schema.path('equipmentId').options.ref,'Equipment');assert.equal(Booking.schema.path('customerId').options.ref,'User');});
+ await t.test('availability compound index covers equipment, state and interval',()=>assert.ok(hasIndex(Booking.schema,{equipmentId:1,status:1,startDate:1,endDate:1})));
+});
