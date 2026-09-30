@@ -6,11 +6,15 @@ import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import {router} from './routes.js';
 import {processOverdueRentals} from './services/booking.js';
+import {isBookingFlowPath,shouldApplyGeneralApiLimit} from './middleware/rateLimits.js';
 const app=express();
 app.use(helmet());
 app.use(cors({origin:process.env.CLIENT_URL||'http://localhost:5173'}));
 app.use(express.json({limit:'8mb'}));
-app.use('/api',rateLimit({windowMs:15*60*1000,limit:300,standardHeaders:true,legacyHeaders:false}));
+app.use('/api/auth',rateLimit({windowMs:15*60*1000,limit:20,standardHeaders:true,legacyHeaders:false,message:{ok:false,error:'Too many authentication attempts. Please try again later.'}}));
+const bookingFlowLimiter=rateLimit({windowMs:15*60*1000,limit:300,standardHeaders:true,legacyHeaders:false,handler:(_req,res)=>res.status(429).json({ok:false,error:'Too many booking or availability requests. Please try again later.'})});
+app.use('/api', (req,res,next)=>isBookingFlowPath(req.path)?bookingFlowLimiter(req,res,next):next());
+app.use('/api',rateLimit({windowMs:15*60*1000,limit:300,standardHeaders:true,legacyHeaders:false,skip:req=>!shouldApplyGeneralApiLimit(req.path),handler:(_req,res)=>res.status(429).json({ok:false,error:'Too many requests. Please try again later.'})}));
 app.get('/api/health',(_req,res)=>res.json({ok:true,data:{service:'BORO API',database:mongoose.connection.readyState===1?'connected':'disconnected'}}));
 app.use('/api',router);
 app.use((err:any,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
